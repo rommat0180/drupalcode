@@ -1,0 +1,262 @@
+<?php 
+/**
+	Adds addres fields to events and advertisement node forms
+ */
+function selected_addresses_form_node_form_alter(&$form, &$form_state, $form_id) {
+	
+	
+	
+	if ( in_array($form_id, array('advertisement_node_form' , 'event_calendar_node_form')) ) {
+		
+		/* if editing the existing node */
+		if(!empty($form_state['node']->nid)) {
+			
+			$nid = $form_state['node']->nid;
+			$selected_addresses = db_query("Select a.* from address a Inner Join cred_selected_addresses c ON a.id=c.address_id WHERE c.nid='".$nid."'")->fetchAll();
+			
+			/* load cities of the zipcode if user enter and received by ajax */
+			$cities = array();
+			$states = array();
+			$countries = array();
+			$zipcode = !empty($_POST['zipcode'])?$_POST['zipcode']:$selected_addresses[0]->zipcode;
+			
+			if(isset($zipcode) && empty($_POST['city']) && !empty($zipcode))	{
+				//print "<pre>"; print_r($selected_addresses); exit;
+				$addresses = _ajax_get_selected_addresses_fields($zipcode);
+				foreach($addresses as $address){
+					$cities[] = $address->city;
+					$states[] = $address->state;
+					$countries[] = $address->country;
+				}
+				$cities = array(''=>'--Select City--')+array_combine($cities,$cities);
+				$states = array(''=>'--Select State--')+array_combine($states,$states);
+				$countries = array(''=>'--Select Country--')+array_combine($countries,$countries);
+			}
+			//elseif(isset($_POST['city']) && isset($_POST['zipcode']) && !empty($_POST['city']) && !empty($_POST['zipcode']))
+			elseif(isset($_POST['city']) && isset($_POST['zipcode']) && !empty($_POST['city']) && !empty($_POST['zipcode']))	
+			{
+				$selected_address_id = _ajax_get_selected_addresses_id($_POST['zipcode'],$_POST['city']);
+				$addresses = _ajax_get_selected_addresses_fields($_POST['zipcode']);
+				foreach($addresses as $address){
+					$cities[] = $address->city;
+					$states[] = $address->state;
+					$countries[] = $address->country;
+				}
+				$cities = array(''=>'--Select City--')+array_combine($cities,$cities);
+				$states = array(''=>'--Select State--')+array_combine($states,$states);
+				$countries = array(''=>'--Select Country--')+array_combine($countries,$countries);
+			}
+			
+			/* Fields conatainer to replace after ajax request */
+			$form['#attached']['js'][] = drupal_get_path('module', 'selected_addresses') . '/selected_addresses.js';
+										
+			$form['container'] = array(
+				'#type' => 'container',
+				'#weight' => 0,
+				'#attributes' => array(
+				'id' => 'cred-addresses',
+				),
+			);
+			$form['container']['zipcode']= array(
+				'#type' => 'textfield',
+				'#title' => t("Zipcode"),
+				'#value' => isset($zipcode)?$zipcode:'',
+				//'#required' => TRUE,
+				'#weight' => 1,
+				'#ajax' => array(
+					'callback' => 'get_addresses_callback',
+					'wrapper' => 'cred-addresses',
+					'method' => 'replace',
+					'effect' => 'fade',
+					)
+			);
+		
+			$form['container']['city']= array(
+				'#type' => 'select',
+				'#options' => !empty($cities)?$cities:array(''=>'--Select City--'),
+				'#title' => t("City"),
+				'#value' => isset($selected_addresses[0]->city)?$selected_addresses[0]->city:'',
+				//'#required' => TRUE,
+				'#weight' => 2,
+				'#ajax' => array(
+					'callback' => 'get_address_id_callback',
+					'wrapper' => 'address-id',
+					'method' => 'replace',
+					'effect' => 'fade',
+					)
+			);
+			$form['container']['state']= array(
+				'#type' => 'select',
+				'#options' => !empty($states)?$states:array(''=>'--Select State--'),
+				'#title' => t("State"),
+				'#value' => isset($selected_addresses[0]->state)?$selected_addresses[0]->state:'',
+				//'#required' => TRUE,
+				'#weight' => 3
+			);
+			$form['container']['country']= array(
+				'#type' => 'select',
+				'#options' => !empty($countries)?$countries:array(''=>'--Select Country--'),
+				'#title' => t("Country"),
+				'#value' => isset($selected_addresses[0]->country)?$selected_addresses[0]->country:'',
+				////'#required' => TRUE,
+				'#weight' => 4
+			);
+			$form['address_id']= array(
+				'#prefix' => '<div id="selected-address-id">',
+				'#suffix' => '</div>',
+				'#type' => 'hidden',
+				'#value' => isset($selected_address_id)?$selected_address_id:'',
+				'#weight' => 15
+			);
+		}
+		/* if adding new node */
+		else {
+			/* load cities of the zipcode if user enter and received by ajax */
+			$cities = array();
+			$states = array();
+			$countries = array();	
+			
+			if(isset($_POST['zipcode']) && empty($_POST['city']) && !empty($_POST['zipcode']))	{
+				
+				$addresses = _ajax_get_selected_addresses_fields($_POST['zipcode']);
+				foreach($addresses as $address){
+					$cities[] = $address->city;
+					$states[] = $address->state;
+					$countries[] = $address->country;
+				}
+				$cities = array(''=>'--Select City--')+array_combine($cities,$cities);
+				$states = array(''=>'--Select State--')+array_combine($states,$states);
+				$countries = array(''=>'--Select Country--')+array_combine($countries,$countries);
+			}
+			elseif(isset($_POST['city']) && isset($_POST['zipcode']) && !empty($_POST['city']) && !empty($_POST['zipcode']))	
+			{
+				$selected_address_id = _ajax_get_selected_addresses_id($_POST['zipcode'],$_POST['city']);
+				$addresses = _ajax_get_selected_addresses_fields($_POST['zipcode']);
+				foreach($addresses as $address){
+					$cities[] = $address->city;
+					$states[] = $address->state;
+					$countries[] = $address->country;
+				}
+				$cities = array(''=>'--Select City--')+array_combine($cities,$cities);
+				$states = array(''=>'--Select State--')+array_combine($states,$states);
+				$countries = array(''=>'--Select Country--')+array_combine($countries,$countries);
+				//unset($_POST['city']);
+				//unset($_POST['zipcode']);
+			}
+			
+			$form['#attached']['js'][] = drupal_get_path('module', 'selected_addresses') . '/selected_addresses.js';
+			
+			/* Fields conatainer to replace after ajax request */
+			$form['container'] = array(
+				'#type' => 'container',
+				'#weight' => -1,
+				'#attributes' => array(
+				'id' => 'cred-addresses',
+				),
+			);
+			$form['container']['zipcode']= array(
+				'#type' => 'textfield',
+				'#title' => t("Zipcode"),
+				'#value' => isset($_POST['zipcode'])?$_POST['zipcode']:'',
+				//'#required' => TRUE,
+				'#weight' => 1,
+				'#ajax' => array(
+					'callback' => 'get_addresses_callback',
+					'wrapper' => 'cred-addresses',
+					'method' => 'replace',
+					'effect' => 'fade',
+				)
+			);
+		
+			$form['container']['city']= array(
+				'#type' => 'select',
+				'#options' => !empty($cities)?$cities:array(''=>'--Select City--'),
+				'#title' => t("City"),
+				//'#required' => TRUE,
+				'#weight' => 2,
+				'#ajax' => array(
+					'callback' => 'get_address_id_callback',
+					'wrapper' => 'selected-address-id',
+					'method' => 'replace',
+					'effect' => 'fade',
+					)
+			);
+			$form['container']['state']= array(
+				'#type' => 'select',
+				'#options' => !empty($states)?$states:array(''=>'--Select State--'),
+				'#title' => t("State"),
+				//'#required' => TRUE,
+				'#weight' => 3
+			);
+			$form['container']['country']= array(
+				'#type' => 'select',
+				'#options' => !empty($countries)?$countries:array(''=>'--Select Country--'),
+				'#title' => t("Country"),
+				////'#required' => TRUE,
+				'#weight' => 4
+			);
+			
+			$form['address_id']= array(
+				'#prefix' => '<div id="selected-address-id">',
+				'#suffix' => '</div>',
+				'#type' => 'hidden',
+				'#value' => isset($selected_address_id)?$selected_address_id:'',
+				'#weight' => 15
+			);
+				
+		} //endif
+
+	} //endif
+}
+
+/* 
+	add options in the address select lists
+*/
+function get_addresses_callback(&$form, &$form_state){
+	//$form = drupal_rebuild_form($form['#form_id'], $form_state, $form);
+	return $form['container'];
+}
+/*
+	this function will be called on rebuild the form
+*/
+function _ajax_get_selected_addresses_fields($zipcode){
+	return $address_fields = db_query("Select * from address where zipcode='".$zipcode."'")->fetchAll();	
+}
+
+function get_address_id_callback(&$form, &$form_state){
+	$form = drupal_rebuild_form($form['#form_id'], $form_state, $form);
+	return $form['address_id'];
+}
+/*
+	this function will be called on rebuild the form
+*/
+function _ajax_get_selected_addresses_id($zipcode,$city){
+	$addresses_ids = db_query("Select id from address WHERE zipcode='".$zipcode."' AND city='".$city."'")->fetchAll();
+	return $addresses_ids[0]->id;	
+}
+
+function selected_addresses_node_insert($node) {	
+	if(in_array($node->type, array('advertisement','event_calendar'))) {
+		db_insert('cred_selected_addresses')
+		  ->fields(array('nid', 'address_id'))
+		  ->values(array('nid'=>$node->nid, 'address_id'=>$node->address_id))
+		  ->execute();
+	}
+}
+
+function selected_addresses_node_update($node) {
+	if(in_array($node->type, array('advertisement','event_calendar')) && !empty($node->address_id) ) {
+		db_update('cred_selected_addresses')
+		  ->fields(array('nid'=>$node->nid, 'address_id'=>$node->address_id))
+		  ->condition('nid', $node->nid)
+		  ->execute();
+	}
+}
+function selected_addresses_node_delete($node) {
+	if(in_array($node->type, array('advertisement','event_calendar'))) {
+		db_delete('cred_selected_addresses')
+		  ->condition('nid', $node->nid)
+		  ->execute();
+	}
+}
+?>

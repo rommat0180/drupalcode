@@ -1,0 +1,4 @@
+name = Selected Address Field
+description = Loads the address fields for a entered zipcode in events and advertisements node, and saves them in a table
+core = 7.x
+package = Cred

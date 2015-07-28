@@ -1,0 +1,25 @@
+<?php
+
+/**
+ * Implements hook_field_schema()
+ *
+ * Create a field. Fields can be created without any needs to attach them to
+ * entities.
+ */
+ /**
+ Note: another table "addresses" is created manually and a CSV file of USA city,state,zipcode has been imported.
+ */
+function selected_addresses_schema() {
+	$schema['cred_selected_addresses'] = array(
+		'description' => 'Addresses selected by users and advertisers in nodes (events OR advertisement) ',
+		'fields' => array(
+			'nid' => array('type' => 'int', 'not null' => FALSE),
+			'address_id' => array('type' => 'int', 'not null' => FALSE),
+		), 
+		'indexes' => array(
+			'address_id' => array('address_id'),
+		),
+	);
+	return $schema;
+}
+?>
