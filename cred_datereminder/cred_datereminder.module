@@ -1,0 +1,356 @@
+<?php
+/**
+* Implementation of hook_menu
+*/
+function cred_datereminder_menu() {
+	$items['user/%user/dateremind'] = array(
+			'title' => t('Date Reminder'),
+			'page callback' => 'myaccount_manage_reminders',
+			'page arguments' => array(1),
+			'access callback' => TRUE,
+			'type' => MENU_LOCAL_TASK,
+			);        
+	$items['admin/config/people/cred_datereminder'] = array(
+			'title' => t('Date Reminder'),
+			'page callback' => 'manage_reminder_options',
+			'access arguments' => array('administer site configuration'),
+			); 
+	$items["admin/config/people/cred_datereminder/settings"] = array(
+		'type' => MENU_DEFAULT_LOCAL_TASK,
+		'title' => 'Configure Settings',
+	);
+	$items['admin/config/people/cred_datereminder/reminder_email'] = array(
+			'title' => t('Email Template'),
+			'page callback' => 'drupal_get_form',
+			'page arguments' => array('cred_datereminder_email_settings'),
+			'access arguments' => array('administer site configuration'),
+			'type' => MENU_LOCAL_TASK,
+			);   
+	return $items;
+}
+function myaccount_manage_reminders($id){
+	$output = array();
+	//form 1
+	$output['leadtime_list'] = drupal_get_form('leadtime_list');
+	$rem_array = allreminders_days();
+	$excluded_rems = user_unchecked_reminders();	
+	$checked_rems = array_diff($rem_array, $excluded_rems);
+	foreach($output['leadtime_list']['fieldset']['cred_reminders'] as $key => $val){
+		if(is_int($key) && in_array($output['leadtime_list']['fieldset']['cred_reminders'][$key]['#return_value'],$checked_rems)){
+			$output['leadtime_list']['fieldset']['cred_reminders'][$key]['#attributes']=array('checked' => 'checked');
+		}
+	}
+	//form 2
+	$output['subscribe_advertisement'] = drupal_get_form('subscribe_advertisement');
+	return $output;
+}
+/**
+	list of reminders on myaccount page
+*/
+function leadtime_list(){
+	global $user;
+	$reminders = array();
+	$reminders = db_query("Select days from cred_datereminder_options order by days ASC")->fetchAll();
+	if (!empty($reminders)) {
+		$form['fieldset'] = array(
+			'#type' => 'fieldset',
+			'#title' => t('Select Reminder Options'),
+		);
+		$header = array('days' => t('Lead Time') );
+		foreach($reminders as $reminder) {
+			if($reminder->days%365==0){
+				$lead = ($reminder->days/365)." ";
+				$lead .= ($lead==1)?'year':'years';	
+			}
+			elseif($reminder->days%30==0){
+				$lead = ($reminder->days/30)." ";
+				$lead .= ($lead==1)?'month':'months';	
+			}
+			else {
+				$lead = $reminder->days." ";
+				$lead .= ($lead==1)?'day':'days';	
+			}
+			$options[$reminder->days] =  array(
+			'days' => $lead,
+			);
+		}
+		
+		$form['fieldset']["cred_reminders"] = array(
+			'#type' => 'tableselect',
+			'#header' => $header,
+			'#options' => $options,
+		);
+		$form['fieldset']['submit'] = array(
+			'#type' => 'submit',
+			'#value' => 'Save',
+			'#submit' => array('_excluded_datereminder_insert'),
+			'#prefix' => '<tr><td></td><td>',
+			'#suffix' => '</td></tr>',	
+		);
+		return $form;
+	}
+}
+function subscribe_advertisement(){
+	global $user;
+	$sub = db_query("Select uid from cred_subscribers where uid='".$user->uid."'")->fetchAll();
+	$form['fieldset'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Adverisement Subscription'),
+	);
+	$form['fieldset']['uid'] = array(
+		'#value' => $user->uid,
+		'#type' => 'hidden',
+		'#size' => 10
+	);
+	if(empty($sub)){
+		$form['fieldset']['submit'] = array(
+			'#type' => 'submit',
+			'#value' => 'Subscribe',
+			'#submit' => array('_cred_adversisement_subscribe'),
+		);
+	}
+	else {
+		$form['fieldset']['submit'] = array(
+			'#type' => 'submit',
+			'#value' => 'Unsubscribe',
+			'#submit' => array('_cred_adversisement_unsubscribe'),
+		);		
+	}
+	return $form;	
+}
+function _cred_adversisement_subscribe($form, &$form_state){
+	db_insert('cred_subscribers')
+	->fields(array('uid' => $form_state['input']['uid']))
+	->execute();
+}
+function _cred_adversisement_unsubscribe($form, &$form_state){
+	db_delete('cred_subscribers')
+	->condition('uid',$form_state['input']['uid'],'=')
+	->execute();	
+}
+/**
+	manage reminders options on config page
+*/
+function manage_reminder_options(){
+	$output = array();
+	$output['add_reminder_option'] = drupal_get_form('_cred_add_datereminder_option');
+	$output['reminder_options_list'] = drupal_get_form('_cred_reminder_options_list');
+	return $output;
+}
+function _cred_add_datereminder_option(){
+	$unit_options = array(1=>'days', 30=>'months', 365=>'years');
+	$form['fieldset'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Add New Reminder Option'),
+	);
+	$form['fieldset']['option_value'] = array(
+		'#title' => 'Value',
+		'#type' => 'textfield',
+		'#size' => 10
+	);
+	$form['fieldset']['option_unit'] = array(
+		'#title' => 'Unit',
+		'#type' => 'select',
+		'#options' => $unit_options,
+	);
+	$form['fieldset']['submit'] = array(
+		'#type' => 'submit',
+		'#value' => 'Submit',
+		'#submit' => array('_cred_datereminder_option_insert'),
+  	);
+	return $form;	
+}
+function _cred_reminder_options_list(){
+	global $user;
+	$reminders = array();
+	$reminders = db_query("Select id,days from cred_datereminder_options order by days ASC")->fetchAll();
+	if (!empty($reminders)) {
+		$form['fieldset'] = array(
+			'#type' => 'fieldset',
+			'#title' => t('Reminder Options'),
+		);
+		$header = array('days' => t('Lead Time') );
+		foreach($reminders as $reminder) {
+			if($reminder->days%365==0){
+				$lead = ($reminder->days/365)." ";
+				$lead .= ($lead==1)?'year':'years';	
+			}
+			elseif($reminder->days%30==0){
+				$lead = ($reminder->days/30)." ";
+				$lead .= ($lead==1)?'month':'months';	
+			}
+			else {
+				$lead = $reminder->days." ";
+				$lead .= ($lead==1)?'day':'days';	
+			}
+			
+			$options[$reminder->id] =  array('days' => $lead);
+		}
+		$form['fieldset']["cred_reminder_option"] = array(
+			'#type' => 'tableselect',
+			'#header' => $header,
+			'#options' => $options,
+		);
+		$form['fieldset']['submit'] = array(
+			'#type' => 'submit',
+			'#value' => 'Delete Selected Reminders',
+			'#submit' => array('_delete_selected_reminder_options'),
+			'#prefix' => '<tr><td></td><td>',
+			'#suffix' => '</td></tr>',	
+		);
+		return $form;
+	}
+	
+}
+/**
+	Email templete in config page
+*/
+function cred_datereminder_email_settings(){
+	$form['fieldset'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Reminder Email Template'),
+	);
+	$form['fieldset']['cred_reminder_subject'] = array(
+		'#title' => 'Subject',
+		'#type' => 'textfield',
+		'#Title' => 'Lead Time',
+		'#default_value' => variable_get('cred_reminder_subject',''),
+	);
+	$form['fieldset']['cred_reminder_detail'] = array(
+		'#title' => 'Detail',
+		'#type' => 'textarea',
+		'#default_value' => variable_get('cred_reminder_detail',''),
+	);
+	$form['fieldset']['tokens'] = array(
+	  '#theme' => 'token_tree',
+	  '#token_types' => array('node'),
+	  '#global_types' => true,
+	  '#click_insert' => true,
+	);
+	return system_settings_form($form);		
+}
+/**
+	insert reminders options on config page
+*/
+function _cred_datereminder_option_insert($form, &$form_state){
+	$days = $form_state['input']['option_value']*$form_state['input']['option_unit'];
+	db_merge('cred_datereminder_options')
+	->key(array(
+		'days' => $days
+	))	
+	->fields(array(
+		'days' => $days,
+	))	
+	->execute();
+}
+/**
+	delete reminders options on config page
+*/
+function _delete_selected_reminder_options($form, &$form_state){
+	db_delete('cred_datereminder_options')
+		  ->condition('id', $form_state['input']['cred_reminder_option'], 'IN')
+		  ->execute();	
+}
+/**
+	insert to Table "cred_datereminder, only unchecked reminders with uid of user who unchecked them." 
+*/
+function _excluded_datereminder_insert($form, &$form_state){
+	$rem_array = allreminders_days();
+	$excluded_rems = array_diff($rem_array, $form_state['input']['cred_reminders']);
+	global $user;
+	_delete_selected_reminders($user->uid);
+	foreach($excluded_rems as $excluded_rem){
+		db_merge('cred_datereminder ')
+		->key(array(
+			'uid' => $user->uid,
+			'excluded_reminders' => $excluded_rem
+		))	
+		->fields(array(
+			'uid' => $user->uid,
+			'excluded_reminders' => $excluded_rem
+		))	
+		->execute();
+	}
+}
+/**
+	delete reminders of current user before insert new ones
+*/
+function _delete_selected_reminders($uid){
+	db_delete('cred_datereminder')
+		  ->condition('uid', $uid, '=')
+		  ->execute();	
+}
+/**
+	hook_cron
+*/
+function cred_datereminder_cron() {
+	$allrems_array = implode(',',allreminders_days()); //print_r($allrems_array); exit;
+	$rems = db_query("Select u.uid, u.mail as email, d.event_calendar_date_value, n.title, n.nid, DATEDIFF(d.event_calendar_date_value, NOW()) as days from users u Inner Join node n ON u.uid=n.uid Inner Join field_data_event_calendar_date d ON n.nid=d.entity_id Group BY n.nid, u.uid Having days IN(".$allrems_array.") AND days NOT IN(Select excluded_reminders from cred_datereminder where uid=u.uid)")->fetchAll();
+	//print "<pre>"; print_r("Select u.uid, u.mail as email, d.event_calendar_date_value, n.title, n.nid, DATEDIFF(d.event_calendar_date_value, NOW()) as days from users u Inner Join cred_datereminder cd ON u.uid=cd.uid Inner Join node n ON u.uid=n.uid Inner Join field_data_event_calendar_date d ON n.nid=d.entity_id Group BY n.nid, u.uid Having  days IN(".$allrems_array.") AND days NOT IN(Select excluded_reminders from cred_datereminder where uid=u.uid)"); exit;
+	//Select u.uid, u.mail as email, d.event_calendar_date_value, n.title, n.nid, DATEDIFF(d.event_calendar_date_value, NOW()) as days from users u Inner Join cred_datereminder cd ON u.uid=cd.uid Inner Join node n ON u.uid=n.uid Inner Join field_data_event_calendar_date d ON n.nid=d.entity_id Group BY n.nid, u.uid Having days IN(1,2,3,5,10,20,30,60,90,120,150,180,210,240,270,300,330,365,730,1095) AND days NOT IN(Select excluded_reminders from cred_datereminder where uid=u.uid)
+	foreach ($rems as $r) {
+		//if ($r->expired == 0) {
+		  _cred_datereminder_send_reminder($r);
+		//}
+	}
+	//mail ( 'faryadali01@gmail.com' , 'This subject of test message' , 'This subject of test message');
+}
+
+function _cred_datereminder_send_reminder($r='') {
+
+  $from ='CredentialMonitor.com';
+
+  $to = $r->email;
+ //$to = 'faryadali01@gmail.com';
+
+  $params = array('reminder' => $r);
+
+  $result = drupal_mail('cred_datereminder', 'reminder', $to, NULL, $params, $from);
+
+  return $result['result'];
+}
+/**
+ * Implements hook_mail().
+ */
+function cred_datereminder_mail($key, &$message, $params) { 
+	$objects['node'] = node_load($params['reminder']->nid);
+	$objects['node']->user = user_load($objects['node']->uid);
+	$subject_text = variable_get('cred_reminder_subject',
+      'Your Events with Title: [node:title] is going to expire on [node:event_calendar_date]');
+	$body_text = variable_get('cred_reminder_detail', '[node:body]');
+
+	$options = array();
+
+	$v = token_replace($subject_text, $objects, $options);
+	$message['subject'] = $v;
+	
+	$v = token_replace($body_text, $objects, array('callback' => 'callback_token_short_date'));
+	$message['body'][] = $v;
+}
+/**
+ * converts long date formate in token_replace() of event date;
+ */
+function callback_token_short_date(&$replacements, &$data, &$options){
+	$date = new DateTime($replacements['[node:event_calendar_date]']);
+	$short_date = $date->format('m-d-Y'); 
+	$replacements['[node:event_calendar_date]'] = $short_date;
+}
+function allreminders_days(){
+	$rem_array = array();
+	$reminders = db_query("Select days from cred_datereminder_options order by days ASC")->fetchAll();
+	foreach($reminders as $reminder){
+		$rem_array[] = $reminder->days;
+	}
+	return $rem_array;	
+}
+function user_unchecked_reminders(){
+	global $user;
+	$excluded_rems = array();
+	$excluded_reminders = db_query("Select excluded_reminders from cred_datereminder Where uid='".$user->uid."'")->fetchAll();
+	foreach($excluded_reminders as $rem){
+		$excluded_rems[] = $rem->excluded_reminders;
+	}
+	return $excluded_rems;
+}
+
+?>

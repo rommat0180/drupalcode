@@ -1,0 +1,47 @@
+<?php
+
+/**
+ * Implements hook_field_schema()
+ *
+ * Create a field. Fields can be created without any needs to attach them to
+ * entities.
+ */
+function cred_datereminder_schema() {
+	$schema['cred_datereminder'] = array(
+		'description' => 'It will have all datereminders set by users at their accout page',
+		'fields' => array(
+			'id' => array('type' => 'serial', 'not null' => true),
+			'uid' => array('type' => 'int', 'not null' => true),
+			'excluded_reminders' => array('type' => 'int', 'not null' => true),
+		), 
+		'indexes' => array(
+			'uid' => array('uid'),
+		),
+		'primary key' => array('id'),
+	);
+	$schema['cred_datereminder_options'] = array(
+		'description' => 'It will have all datereminders set by users at their accout page',
+		'fields' => array(
+			'id' => array('type' => 'serial', 'not null' => true),
+			'days' => array('type' => 'int', 'not null' => true),
+		), 
+		'primary key' => array('id'),
+	);	
+	$schema['cred_subscribers'] = array(
+		'description' => 'It will have user ids of all those users who are subscribers of advertisements',
+		'fields' => array(
+			'id' => array('type' => 'serial', 'not null' => FALSE),
+			'uid' => array('type' => 'int', 'not null' => FALSE),
+		), 
+		'indexes' => array(
+			'uid' => array('uid'),
+		),
+		'primary key' => array('id'),
+	);
+	return $schema;
+}
+
+function cred_datereminder_uninstall() {
+	drupal_uninstall_schema($module='cred_datereminder');
+}
+?>

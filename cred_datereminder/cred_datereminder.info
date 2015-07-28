@@ -1,0 +1,4 @@
+name = Cred Date Reminder
+description = This module will display a datereminder tab on user page for managing all event calendar reminders
+core = 7.x
+package = Cred
